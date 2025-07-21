@@ -8,7 +8,7 @@ import uvicorn
 
 app = FastAPI(
     title="Investment Simulator API",
-    description="API for simulating stock investment strategies",
+    description="API for simulating stock investment scenarios using historical data",
     version="1.0.0"
 )
 

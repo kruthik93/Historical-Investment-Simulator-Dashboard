@@ -5,11 +5,13 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import date, datetime
 import warnings
+import requests
+import json
 warnings.filterwarnings('ignore')
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="Investment Simulator Dashboard",
+    page_title="Investment Regret Simulator",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -170,18 +172,49 @@ def validate_ticker_with_cache(ticker):
         st.session_state.ticker_info_cache[ticker] = result
         return result
 
+def call_investment_api(ticker, start_date, end_date, monthly_investment_amount, starting_amount, day_of_investment, api_base_url="http://localhost:8001"):
+    """Call the FastAPI backend for investment simulation"""
+    try:
+        payload = {
+            "ticker": ticker,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "monthly_investment_amount": monthly_investment_amount,
+            "starting_amount": starting_amount,
+            "day_of_investment": day_of_investment
+        }
+        
+        response = requests.post(f"{api_base_url}/simulate", json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            return response.json(), None
+        else:
+            error_detail = response.json().get("detail", "Unknown error")
+            return None, f"API Error ({response.status_code}): {error_detail}"
+            
+    except requests.exceptions.ConnectionError:
+        return None, "Could not connect to FastAPI server. Make sure it's running on http://localhost:8001"
+    except requests.exceptions.Timeout:
+        return None, "API request timed out. The server might be overloaded."
+    except Exception as e:
+        return None, f"Error calling API: {str(e)}"
+
 # App title
-st.markdown('<h1 class="main-header">📈 Investment Simulator Dashboard</h1>', unsafe_allow_html=True)
-st.markdown("**Simulate Dollar-Cost Averaging (DCA) investment strategies with real stock data**")
+st.markdown('<h1 class="main-header">📈 Historical Investment Regret Simulator Dashboard</h1>', unsafe_allow_html=True)
+st.markdown("**Understand how much money you could have had today. Simulate Dollar-Cost Averaging (DCA) investment strategies with real stock data**")
+st.markdown("**Please Note: This is not investment advice!!!**")
 
 # Input section - organized in left column format
-st.markdown("### Investment Parameters")
+st.markdown("### Input Parameters")
 
 # Create main layout: inputs on left, results on right
 input_col, result_col = st.columns([1, 2])
 
 with input_col:
-    st.markdown("#### 📊 Setup Your Investment")
+    st.markdown("#### 📊 How could you have invested?")
+    
+    # API backend info
+    st.info("🚀 Using FastAPI backend (http://localhost:8001)")
     
     # Row 1: Stock ticker search and selection
     ticker_col1, ticker_col2 = st.columns(2)
@@ -259,7 +292,7 @@ with input_col:
     
     with quick_col2:
         st.markdown("**Quick End:**")
-        if st.button("📅 Today", 
+        if st.button("Today", 
                     help="Set end date to today", 
                     key="today_button",
                     type="secondary",
@@ -272,10 +305,10 @@ with input_col:
     amount_col1, amount_col2 = st.columns(2)
     
     with amount_col1:
-        starting_amount = st.number_input("Starting Amount ($)", min_value=0, value=1000, step=100)
+        starting_amount = st.number_input("Starting Amount ($)", min_value=0, value=1000, step=500)
     
     with amount_col2:
-        monthly_investment_amount = st.number_input("Monthly Investment ($)", min_value=0, value=1000, step=100)
+        monthly_investment_amount = st.number_input("Monthly Investment ($)", min_value=0, value=1000, step=500)
     
     # Row 5: Investment day
     day_of_investment = st.number_input("Investment Day of Month", min_value=1, max_value=30, value=1, 
@@ -283,8 +316,8 @@ with input_col:
     
     # Row 6: Simulate button
     st.markdown("---")
-    simulate_button = st.button("🚀 Simulate Investment", type="primary", use_container_width=True)
-    
+    simulate_button = st.button("🔮 Simulate", type="primary", use_container_width=True)
+
     # Display ticker validation in input column
     if ticker and ticker != "":
         with st.expander("ℹ️ Ticker Info", expanded=False):
@@ -316,69 +349,67 @@ with result_col:
     
     if simulate_button:
         try:
-            # Clean ticker input
+            # Clean the ticker input provided by user
             ticker = ticker.strip().upper()
             
             if not ticker:
                 st.error("❌ Please enter a ticker symbol")
                 st.stop()
             
-            with st.spinner('📊 Analyzing investment data...'):
-                # Download and process stock data
-                stock_data = yf.download(ticker, start=start_date - pd.Timedelta(days=7), end=end_date)
+            # Call FastAPI backend
+            with st.spinner('🚀 Calling FastAPI backend...'):
+                api_result, api_error = call_investment_api(
+                    ticker, start_date, end_date, monthly_investment_amount, 
+                    starting_amount, day_of_investment
+                )
                 
-                # Check if data was successfully downloaded
-                if stock_data.empty:
-                    st.error(f"❌ **Ticker '{ticker}' not found or has no data for the selected date range.**")
-                    st.info("💡 **Suggestions:**")
-                    st.info("• Check if the ticker symbol is correct (e.g., AAPL for Apple)")
-                    st.info("• Try a different date range - the stock might not have traded during this period")
-                    st.info("• Use the dropdown to select from popular tickers")
-                    st.info("• For international stocks, you might need the exchange suffix (e.g., 0700.HK for Tencent)")
+                if api_error:
+                    st.error(f"❌ {api_error}")
                     st.stop()
                 
-                # Check if the data has the expected columns
-                if 'Close' not in stock_data.columns:
-                    st.error(f"❌ **Invalid data received for ticker '{ticker}'.**")
-                    st.info("💡 This ticker might not be a valid stock symbol. Please try a different ticker.")
-                    st.stop()
+                # Extract results from API response
+                total_invested_amount = api_result['total_invested_amount']
+                final_investment_value = api_result['final_investment_value']
+                total_return = api_result['total_return']
+                percentage_return = api_result['percentage_return']
+                cagr = api_result['cagr']
+                num_months = api_result['num_months']
                 
-                stock_data = stock_data[['Close']].round(2)
-                date_range = pd.date_range(start=start_date - pd.Timedelta(days=7), end=end_date)
-                stock_data = stock_data.reindex(date_range)
-                stock_data.fillna(method='ffill', inplace=True)
-                stock_data = stock_data[(stock_data.index >= pd.to_datetime(start_date)) & (stock_data.index <= pd.to_datetime(end_date))]
-                stock_data.columns = ['Close']
+                # For charting, we still need to fetch the stock data locally
+                # (API doesn't return detailed time series data in the current format)
+                with st.spinner('📊 Fetching chart data...'):
+                    stock_data = yf.download(ticker, start=start_date - pd.Timedelta(days=7), end=end_date)
+                    if not stock_data.empty and 'Close' in stock_data.columns:
+                        # Prepare data for charting (simplified version)
+                        stock_data = stock_data[['Close']].round(2)
+                        date_range = pd.date_range(start=start_date - pd.Timedelta(days=7), end=end_date)
+                        stock_data = stock_data.reindex(date_range)
+                        stock_data.fillna(method='ffill', inplace=True)
+                        stock_data = stock_data[(stock_data.index >= pd.to_datetime(start_date)) & (stock_data.index <= pd.to_datetime(end_date))]
+                        stock_data.columns = ['Close']
+                        
+                        # Reconstruct investment data for charting
+                        stock_data['mnth_inv_amt'] = 0.0
+                        for date_idx in stock_data.index:
+                            if date_idx.day == day_of_investment:
+                                stock_data.at[date_idx, 'mnth_inv_amt'] = monthly_investment_amount
+                        stock_data.at[stock_data.index[0], 'mnth_inv_amt'] += starting_amount
+                        
+                        stock_data['stocks_purchased'] = stock_data['mnth_inv_amt'] / stock_data['Close']
+                        stock_data['cumulative_stocks'] = stock_data['stocks_purchased'].cumsum()
+                        stock_data['total_value'] = stock_data['cumulative_stocks'] * stock_data['Close']
+                        stock_data['total_investment'] = stock_data['mnth_inv_amt'].cumsum()
+            
+            # Calculate num_years for display
+            num_years = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days / 365.25
 
-                # Calculate investment metrics
-                stock_data['start_inv_amt'] = starting_amount
-                stock_data['mnth_inv_amt'] = 0.0
-                for date_idx in stock_data.index:
-                    if date_idx.day == day_of_investment:
-                        stock_data.at[date_idx, 'mnth_inv_amt'] = monthly_investment_amount
-                stock_data.at[stock_data.index[0], 'mnth_inv_amt'] += starting_amount
-
-                stock_data['stocks_purchased'] = stock_data['mnth_inv_amt'] / stock_data['Close']
-                stock_data['cumulative_stocks'] = stock_data['stocks_purchased'].cumsum()
-                stock_data['total_value'] = stock_data['cumulative_stocks'] * stock_data['Close']
-                stock_data['total_investment'] = stock_data['mnth_inv_amt'].cumsum()
-
-                # Calculate summary metrics
-                total_invested_amount = stock_data['total_investment'].iloc[-1]
-                final_investment_value = stock_data['total_value'].iloc[-1]
-                total_return = final_investment_value - total_invested_amount
-                percentage_return = (total_return / total_invested_amount) * 100
-                num_years = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days / 365.25
-                cagr = ((final_investment_value / total_invested_amount) ** (1 / num_years) - 1) * 100
-                num_months = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days // 30
-
-            # Layout: Charts on left, metrics on right
+            # Current Output Layout: Charts on left, metrics on right
             chart_col, metrics_col = st.columns([2, 1])
             
             with chart_col:
-                st.markdown("### 📊 Investment Growth Analysis")
+                st.markdown("### 📊 Investment Return Analysis")
                 
-                # Create the investment growth chart
+                # Create the investment return chart
                 fig, ax = plt.subplots(figsize=(12, 8))
                 
                 # Plot both lines
@@ -427,24 +458,24 @@ with result_col:
                 return_color = "normal" if total_return >= 0 else "inverse"
                 
                 st.metric(
-                    label="📊 Total Return",
-                    value=f"${total_return:,.2f}",
-                    delta=f"{percentage_return:+.2f}%",
-                    delta_color=return_color
-                )
-                
-                st.metric(
-                    label="💵 Total Invested",
+                    label="🌰 Total Cash Invested",
                     value=f"${total_invested_amount:,.2f}"
                 )
                 
                 st.metric(
-                    label="🎯 Final Value",
+                    label="🌳 Final Portfolio Value",
                     value=f"${final_investment_value:,.2f}"
                 )
                 
                 st.metric(
-                    label="📈 CAGR",
+                    label="🌱 Total Return",
+                    value=f"${total_return:,.2f}",
+                    delta=f"{percentage_return:+.2f}%",
+                    delta_color=return_color
+                )
+
+                st.metric(
+                    label="🌱 Compounded Annual Growth Rate (CAGR)",
                     value=f"{cagr:+.2f}%",
                     help="Compound Annual Growth Rate"
                 )
@@ -469,9 +500,9 @@ with result_col:
                 """)
                 
                 if total_return > 0:
-                    st.success(f"🎉 Great job! Your investment strategy generated a positive return of ${total_return:,.2f}")
+                    st.success(f"📈 Your investments could have generated a positive return of ${total_return:,.2f}, Great success !")
                 else:
-                    st.warning(f"📉 Your investment had a loss of ${abs(total_return):,.2f}. Consider diversifying or adjusting your strategy.")
+                    st.warning(f"📉 Your investments could have had a loss of ${abs(total_return):,.2f}")
 
         except Exception as e:
             # Enhanced error handling for ticker-related issues
@@ -493,8 +524,8 @@ with result_col:
     
     else:
         # Display placeholder content when not simulating
-        st.markdown("### 📊 Ready to Simulate")
-        st.info("👈 Configure your investment parameters on the left and click 'Simulate Investment' to see results!")
+        st.markdown("### 📊 Ready to regret?")
+        st.info("👈 Configure your investment parameters on the left and click 'Simulate Investment' to see how much you could have had!")
         
         # Show sample metrics as placeholders
         st.markdown("#### Sample Metrics Display:")

@@ -1,6 +1,10 @@
-# Investment Simulator Dashboard
+# Historical Investment Regret Simulator Dashboard
 
-A comprehensive investment simulation tool that helps users understand the potential growth of their investments over time using Dollar-Cost Averaging (DCA) strategy.
+Ever wondered how much money you would have had right now if you had only regularly invested a portion of your paycheck? Well this tool is for you !
+
+This Dashboard is an investment simulation tool that helps users understand the potential growth investments could have had over time using Dollar-Cost Averaging (DCA) strategy
+
+Please note: This is not investment advice !!! This dashboard is used to simulate what potentially could have happened historically, and should not be considered for making any financial decisions.
 
 ## Features
 
@@ -156,3 +160,5 @@ python test_api.py
 ## License
 
 This project is open source and available under the MIT License.
+
+This project was developed with assistance from AI tools such as GitHub Copilot and Claude.

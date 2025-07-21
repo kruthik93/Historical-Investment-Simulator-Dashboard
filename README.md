@@ -161,4 +161,5 @@ python test_api.py
 
 This project is open source and available under the MIT License.
 
+## Disclaimer
 This project was developed with assistance from AI tools such as GitHub Copilot and Claude.

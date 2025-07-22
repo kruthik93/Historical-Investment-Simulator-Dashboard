@@ -6,6 +6,8 @@ This Dashboard is an investment simulation tool that helps users understand the 
 
 Please note: This is not investment advice !!! This dashboard is used to simulate what potentially could have happened historically, and should not be considered for making any financial decisions.
 
+<img width="1741" height="927" alt="image" src="https://github.com/user-attachments/assets/342a6c03-293e-4fa1-9b2d-f5fbca5ad48f" />
+
 ## Features
 
 - **Streamlit Dashboard**: Interactive web interface for investment simulation
